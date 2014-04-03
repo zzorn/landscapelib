@@ -1,0 +1,15 @@
+*.class
+
+# Temp files
+*.*~
+
+# Package Files
+*.jar
+*.war
+*.ear
+
+# Project files
+.idea/
+*.iml
+target/
+
