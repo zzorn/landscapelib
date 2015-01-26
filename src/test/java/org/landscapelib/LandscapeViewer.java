@@ -25,8 +25,18 @@ public class LandscapeViewer implements ApplicationListener {
     public ModelInstance instance;
     public Environment environment;
     public CameraInputController camController;
+    private ChunkManager chunkManager;
 
     public void create () {
+        chunkManager = new ChunkManager(new TestWorldFunction());
+
+        System.out.println("Starting chunk generation");
+        chunkManager.createTestStuff();
+        System.out.println("Chunk generation done");
+
+
+
+
         // Setup model batching
         modelBatch = new ModelBatch();
 
@@ -40,12 +50,14 @@ public class LandscapeViewer implements ApplicationListener {
 
         // Create test model
         ModelBuilder modelBuilder = new ModelBuilder();
-        model = modelBuilder.createBox(5f, 5f, 5f,
-                                       new Material(ColorAttribute.createDiffuse(Color.GREEN)),
+        model = modelBuilder.createBox(1, 1, 1,
+                                       new Material(ColorAttribute.createDiffuse(Color.ORANGE)),
                                        VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
+
 
         // Create instance of model to render
         instance = new ModelInstance(model);
+        instance.transform.translate(22, 22, 22);
 
         // Setup lighting
         environment = new Environment();
@@ -67,7 +79,10 @@ public class LandscapeViewer implements ApplicationListener {
 
         // Render scene
         modelBatch.begin(cam);
+        chunkManager.render(modelBatch, environment);
+
         modelBatch.render(instance, environment);
+
         modelBatch.end();
     }
 
