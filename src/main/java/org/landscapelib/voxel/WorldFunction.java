@@ -1,4 +1,4 @@
-package org.landscapelib;
+package org.landscapelib.voxel;
 
 import com.badlogic.gdx.math.Vector3;
 

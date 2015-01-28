@@ -1,7 +1,6 @@
 package org.landscapelib;
 
 import com.badlogic.gdx.ApplicationListener;
-import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplication;
 import com.badlogic.gdx.graphics.Color;
@@ -13,6 +12,10 @@ import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import org.landscapelib.voxel.ChunkManager;
+import org.landscapelib.voxel.TestWorldFunction;
+import org.landscapelib.voxel.VoxelLandscape;
+import org.landscapelib.voxel.WorldFunction;
 
 /**
  * Utility application for viewing and moving around in a landscape.
@@ -25,17 +28,17 @@ public class LandscapeViewer implements ApplicationListener {
     public ModelInstance instance;
     public Environment environment;
     public CameraInputController camController;
+
+    private WorldFunction worldFunction;
+
     private ChunkManager chunkManager;
 
+    private VoxelLandscape voxelLandscape;
+
     public void create () {
-        chunkManager = new ChunkManager(new TestWorldFunction());
 
-        System.out.println("Starting chunk generation");
-        chunkManager.createTestStuff();
-        System.out.println("Chunk generation done");
-
-
-
+        // Create world
+        worldFunction = new TestWorldFunction();
 
         // Setup model batching
         modelBatch = new ModelBatch();
@@ -47,6 +50,15 @@ public class LandscapeViewer implements ApplicationListener {
         cam.near = 1f;
         cam.far = 300f;
         cam.update();
+
+        // Setup voxel landscape
+        chunkManager = new ChunkManager(new TestWorldFunction());
+        System.out.println("Starting chunk generation");
+        final int mostDetailedChunkSizeMeters = 10;
+        final int numDetailLevels = 5;
+        voxelLandscape = new VoxelLandscape(numDetailLevels, mostDetailedChunkSizeMeters, worldFunction, cam, chunkManager);
+        System.out.println("Chunk generation done");
+
 
         // Create test model
         ModelBuilder modelBuilder = new ModelBuilder();
@@ -73,13 +85,16 @@ public class LandscapeViewer implements ApplicationListener {
         // Update from input
         camController.update();
 
+        voxelLandscape.update(Gdx.graphics.getDeltaTime());
+
         // Clear screen
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
         // Render scene
         modelBatch.begin(cam);
-        chunkManager.render(modelBatch, environment);
+
+        voxelLandscape.render(modelBatch, environment);
 
         modelBatch.render(instance, environment);
 
@@ -98,6 +113,7 @@ public class LandscapeViewer implements ApplicationListener {
     public void dispose () {
         modelBatch.dispose();
         model.dispose();
+        voxelLandscape.dispose();
     }
 
 
