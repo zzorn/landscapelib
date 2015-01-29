@@ -1,7 +1,5 @@
 package org.landscapelib.voxel;
 
-import com.badlogic.gdx.graphics.g3d.Environment;
-import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
@@ -20,7 +18,7 @@ public class ChunkManager {
 
     private final Pool<Chunk> chunkPool = new Pool<Chunk>(100, 200) {
         @Override protected Chunk newObject() {
-            return new Chunk(modelBuilder);
+            return new Chunk();
         }
     };
 

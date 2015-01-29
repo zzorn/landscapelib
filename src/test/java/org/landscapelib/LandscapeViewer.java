@@ -24,7 +24,7 @@ import org.landscapelib.voxel.WorldFunction;
  */
 public class LandscapeViewer implements ApplicationListener {
 
-    private static final int VELOCITY_M_PER_SECOND = 10;
+    private static final int VELOCITY_M_PER_SECOND = 1;
     public PerspectiveCamera cam;
     public ModelBatch modelBatch;
     public Model model;
@@ -38,8 +38,8 @@ public class LandscapeViewer implements ApplicationListener {
 
     private VoxelLandscape voxelLandscape;
 
-    private static final int NUM_DETAIL_LEVELS = 5;
-    private static final int MOST_DETAILED_CHUNK_SIZE_METERS = 8;
+    private static final int NUM_DETAIL_LEVELS = 10;
+    private static final float MOST_DETAILED_BLOCK_SIZE_METERS = 0.1f;
 
     public void create () {
 
@@ -61,7 +61,7 @@ public class LandscapeViewer implements ApplicationListener {
         chunkManager = new ChunkManager(new TestWorldFunction());
         System.out.println("Starting chunk generation");
         voxelLandscape = new VoxelLandscape(NUM_DETAIL_LEVELS,
-                                            MOST_DETAILED_CHUNK_SIZE_METERS, worldFunction, cam, chunkManager);
+                                            MOST_DETAILED_BLOCK_SIZE_METERS, worldFunction, cam, chunkManager);
         System.out.println("Chunk generation done");
 
 

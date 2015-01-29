@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Vector3;
 import org.flowutils.Check;
 
@@ -78,7 +79,9 @@ public class DetailLevel {
         chunks = new Chunk[storageSize * storageSize * storageSize];
         tempChunks = new Chunk[storageSize * storageSize * storageSize];
 
-        debugColor1 = new Color((chunkSizeMeters) / (chunkSizeMeters + 20f), 0.5f, 0f, 1f) ;
+        debugColor1 = new Color(1 - ((chunkSizeMeters) / (chunkSizeMeters + 10f)),
+                                0.5f,
+                                (chunkSizeMeters) / (chunkSizeMeters + 100f), 1f) ;
         debugColor2 = debugColor1.cpy().lerp(Color.WHITE, 0.25f);
 
         // Initialize position
@@ -122,13 +125,13 @@ public class DetailLevel {
         }
     }
 
-    public void render(ModelBatch modelBatch, Environment environment) {
+    public void render(ModelBatch modelBatch, Environment environment, ModelBuilder modelBuilder) {
 
         for (int z = cacheMargin; z < storageSize - cacheMargin; z++) {
             for (int y = cacheMargin; y < storageSize - cacheMargin; y++) {
                 for (int x = cacheMargin; x < storageSize - cacheMargin; x++) {
                     if (isVisible(x, y, z)) {
-                        getChunk(x, y, z).render(modelBatch, environment, center);
+                        getChunk(x, y, z).render(modelBatch, environment, center, modelBuilder);
                     }
                 }
             }

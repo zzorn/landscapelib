@@ -7,11 +7,9 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
-import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Pool;
 
-import static org.flowutils.Check.notNull;
 
 /**
  * Holds data for a section of voxels.
@@ -24,8 +22,6 @@ public final class Chunk implements Pool.Poolable{
      */
     public final static int CHUNK_SIZE = 8;
 
-    private final static float RELATIVE_BLOCK_SIZE = 1f / CHUNK_SIZE;
-
     // NOTE: Update these as well if chunk size is changed:
     private final static int CHUNK_SIZE_MASK = CHUNK_SIZE - 1;
     private final static int CHUNK_SIZE_SHIFT = 3;
@@ -37,31 +33,18 @@ public final class Chunk implements Pool.Poolable{
      */
     private final static int BLOCK_COUNT = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
-    private  Material blockMaterial = new Material(ColorAttribute.createDiffuse(Color.GREEN));
+    private static final Material DEFAULT_MATERIAL = new Material(ColorAttribute.createDiffuse(Color.GREEN));
+
     private static final int BLOCK_ATTRIBUTES = VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal;
 
     private Vector3 center = new Vector3();
-
     private float chunkSizeInMeters = 1;
-
     private byte[] blockTypes = new byte[BLOCK_COUNT];
-
     private boolean modelNeedsRegeneration = false;
-
     private ModelInstance modelInstance;
-    private final ModelBuilder modelBuilder;
-    private Model model;
+    private Material blockMaterial = DEFAULT_MATERIAL;
 
-    private Matrix4 tempMatrix = new Matrix4();
-
-
-    public Chunk(ModelBuilder modelBuilder) {
-        notNull(modelBuilder, "modelBuilder");
-
-        this.modelBuilder = modelBuilder;
-
-        // TODO Temporary debug material, replace
-        if ((this.hashCode() % 2) == 0) this.blockMaterial =  new Material(ColorAttribute.createDiffuse(Color.RED));
+    public Chunk() {
     }
 
     public void setDebugColor(Color color) {
@@ -161,9 +144,9 @@ public final class Chunk implements Pool.Poolable{
     }
 
 
-    public ModelInstance getModelInstance() {
+    public ModelInstance getModelInstance(ModelBuilder modelBuilder) {
         if (modelInstance == null || modelNeedsRegeneration) {
-            modelInstance = createModelInstance();
+            modelInstance = createModelInstance(modelBuilder);
             modelNeedsRegeneration = false;
         }
 
@@ -174,7 +157,7 @@ public final class Chunk implements Pool.Poolable{
         clearOldModel();
     }
 
-    private ModelInstance createModelInstance() {
+    private ModelInstance createModelInstance(ModelBuilder modelBuilder) {
 
         clearOldModel();
 
@@ -193,7 +176,7 @@ public final class Chunk implements Pool.Poolable{
                                                               blockMaterial);
 
         Vector3 blockPos = new Vector3();
-        float blockSizeInMeters = (float) chunkSizeInMeters / CHUNK_SIZE;
+        float blockSizeInMeters = chunkSizeInMeters / CHUNK_SIZE;
 
         for (int z = 0; z < CHUNK_SIZE; z++) {
             for (int y = 0; y < CHUNK_SIZE; y++) {
@@ -228,7 +211,7 @@ public final class Chunk implements Pool.Poolable{
         }
 
 
-        model = modelBuilder.end();
+        Model model = modelBuilder.end();
 
 
         // Create instance of model to render
@@ -241,16 +224,13 @@ public final class Chunk implements Pool.Poolable{
     }
 
     private void clearOldModel() {
-        if (model != null) {
-            model.dispose();
-            model = null;
-        }
+        dispose();
 
         modelNeedsRegeneration = true;
     }
 
-    public void render(ModelBatch modelBatch, Environment environment, Vector3 offset) {
-        final ModelInstance modelInstance = getModelInstance();
+    public void render(ModelBatch modelBatch, Environment environment, Vector3 offset, ModelBuilder modelBuilder) {
+        final ModelInstance modelInstance = getModelInstance(modelBuilder);
 
         //tempMatrix.set(modelInstance.transform);
 
@@ -279,6 +259,9 @@ public final class Chunk implements Pool.Poolable{
     }
 
     public void dispose() {
-        model.dispose();
+        if (modelInstance != null && modelInstance.model != null) {
+            modelInstance.model.dispose();
+            modelInstance = null;
+        }
     }
 }

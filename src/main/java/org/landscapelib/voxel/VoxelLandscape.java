@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.g3d.Attribute;
 import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.utils.Array;
 import org.flowutils.Check;
 
@@ -24,14 +25,16 @@ public class VoxelLandscape {
     private static final int MARGIN_SIZE = 1;
     private static final int HOLE_SIZE = 3;
 
+    private final ModelBuilder modelBuilder = new ModelBuilder();
+
     public VoxelLandscape(int numDetailLevels,
-                          float mostDetailedChunkSizeMeters,
+                          float mostDetailedBlockSizeMeters,
                           WorldFunction worldFunction,
                           Camera camera,
                           ChunkManager chunkManager) {
 
         Check.positive(numDetailLevels, "numDetailLevels");
-        Check.positive(mostDetailedChunkSizeMeters, "mostDetailedChunkSizeMeters");
+        Check.positive(mostDetailedBlockSizeMeters, "mostDetailedBlockSizeMeters");
         notNull(worldFunction, "worldFunction");
         notNull(camera, "camera");
         notNull(chunkManager, "chunkManager");
@@ -41,7 +44,7 @@ public class VoxelLandscape {
         this.camera = camera;
         this.chunkManager = chunkManager;
 
-        float chunkSizeMeters = mostDetailedChunkSizeMeters;
+        float chunkSizeMeters = mostDetailedBlockSizeMeters * Chunk.CHUNK_SIZE;
 
         float chunkSizeChange = (float)LAYER_SIZE / HOLE_SIZE;
 
@@ -67,7 +70,7 @@ public class VoxelLandscape {
 
     public void render(ModelBatch modelBatch, Environment environment) {
         for (DetailLevel detailLevel : detailLevels) {
-            detailLevel.render(modelBatch, environment);
+            detailLevel.render(modelBatch, environment, modelBuilder);
         }
     }
 
