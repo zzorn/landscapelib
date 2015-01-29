@@ -15,15 +15,15 @@ import static org.flowutils.Check.notNull;
  */
 public class VoxelLandscape {
 
-    private final Array<DetailLevel> detailLevels = new Array<DetailLevel>();
+    private final DetailLevel[] detailLevels;
 
     private final WorldFunction worldFunction;
     private final Camera camera;
     private final ChunkManager chunkManager;
 
-    private static final int LAYER_SIZE = 6;
-    private static final int MARGIN_SIZE = 1;
-    private static final int HOLE_SIZE = 3;
+    private static final int LAYER_SIZE = 4;
+    private static final int MARGIN_SIZE = 0;
+    private static final int HOLE_SIZE = 2;
 
     private final ModelBuilder modelBuilder = new ModelBuilder();
 
@@ -48,23 +48,32 @@ public class VoxelLandscape {
 
         float chunkSizeChange = (float)LAYER_SIZE / HOLE_SIZE;
 
+        int chunksPerLowerDetailLevelChunk = LAYER_SIZE / HOLE_SIZE;
+        int levelOfDetailMargin = chunksPerLowerDetailLevelChunk;
+
+
         // Create detail levels
+        detailLevels = new DetailLevel[numDetailLevels];
+        DetailLevel detailLevel = null;
         for (int i = 0; i < numDetailLevels; i++) {
-            detailLevels.add(new DetailLevel(worldFunction,
-                                             camera,
-                                             chunkSizeMeters,
-                                             chunkManager,
-                                             LAYER_SIZE,
-                                             i == 0 ? 0 : HOLE_SIZE,
-                                             MARGIN_SIZE));
+            detailLevel = new DetailLevel(worldFunction,
+                                          camera,
+                                          chunkSizeMeters,
+                                          chunkManager,
+                                          LAYER_SIZE,
+                                          i == 0 ? 0 : HOLE_SIZE,
+                                          levelOfDetailMargin,
+                                          MARGIN_SIZE,
+                                          detailLevel);
+            detailLevels[i] = detailLevel;
 
             chunkSizeMeters *= chunkSizeChange;
         }
     }
 
     public void update(double secondsSinceLastCall) {
-        for (DetailLevel detailLevel : detailLevels) {
-            detailLevel.update(secondsSinceLastCall);
+        for (int i = detailLevels.length - 1; i >= 0; i--) {
+            detailLevels[i].update(secondsSinceLastCall);
         }
     }
 
@@ -75,10 +84,10 @@ public class VoxelLandscape {
     }
 
     public void dispose() {
-        for (DetailLevel detailLevel : detailLevels) {
-            detailLevel.dispose();
-        }
+        for (int i = 0; i < detailLevels.length; i++) {
+            detailLevels[i].dispose();
+            detailLevels[i] = null;
 
-        detailLevels.clear();
+        }
     }
 }

@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Vector3;
 import org.flowutils.Check;
+import org.flowutils.MathUtils;
 
 import static org.flowutils.Check.notNull;
 
@@ -25,6 +26,7 @@ public class DetailLevel {
     private final Camera camera;
     private final float chunkSizeMeters;
     private final ChunkManager chunkManager;
+    private final DetailLevel higherDetailLevel;
 
     private long centerChunkX;
     private long centerChunkY;
@@ -34,6 +36,7 @@ public class DetailLevel {
 
     private final int holeSize;
     private final int layerSize;
+    private final int levelOfDetailMargin;
     private final int cacheMargin;
     private final int storageSize;
 
@@ -41,6 +44,14 @@ public class DetailLevel {
     private Color debugColor2;
 
     private boolean showDebugColor = true;
+
+    private Vector3 holeStart = new Vector3();
+    private Vector3 holeEnd = new Vector3();
+    private Vector3 boundingVolumeStart;
+    private Vector3 boundingVolumeEnd;
+
+    private Vector3 temp = new Vector3();
+
 
     /**
      * @param worldFunction function used to generate the world.
@@ -57,7 +68,9 @@ public class DetailLevel {
                        ChunkManager chunkManager,
                        int layerSize,
                        int holeSize,
-                       int cacheMargin) {
+                       int levelOfDetailMargin,
+                       int cacheMargin,
+                       DetailLevel higherDetailLevel) {
         notNull(worldFunction, "worldFunction");
         notNull(camera, "camera");
         notNull(chunkManager, "chunkManager");
@@ -65,17 +78,20 @@ public class DetailLevel {
         Check.positive(layerSize, "layerSize");
         Check.positiveOrZero(holeSize, "holeSize");
         Check.positiveOrZero(cacheMargin, "cacheMargin");
+        Check.positiveOrZero(levelOfDetailMargin, "levelOfDetailMargin");
         Check.greater(layerSize, "layerSize", holeSize, "holeSize");
 
+        this.higherDetailLevel = higherDetailLevel;
         this.worldFunction = worldFunction;
         this.camera = camera;
         this.chunkSizeMeters = chunkSizeMeters;
         this.chunkManager = chunkManager;
         this.holeSize = holeSize;
         this.layerSize = layerSize;
+        this.levelOfDetailMargin = levelOfDetailMargin;
         this.cacheMargin = cacheMargin;
 
-        storageSize = layerSize + 2 * cacheMargin;
+        storageSize = layerSize + 2 * cacheMargin + 2 * levelOfDetailMargin;
         chunks = new Chunk[storageSize * storageSize * storageSize];
         tempChunks = new Chunk[storageSize * storageSize * storageSize];
 
@@ -86,12 +102,7 @@ public class DetailLevel {
 
         // Initialize position
         final Vector3 cameraPos = camera.position;
-        centerChunkX = worldPosToChunk(cameraPos.x);
-        centerChunkY = worldPosToChunk(cameraPos.y);
-        centerChunkZ = worldPosToChunk(cameraPos.z);
-        center.x = centerChunkX * chunkSizeMeters;
-        center.y = centerChunkY * chunkSizeMeters;
-        center.z = centerChunkZ * chunkSizeMeters;
+        setCenter(cameraPos);
 
         generateMissingChunks();
     }
@@ -112,12 +123,10 @@ public class DetailLevel {
             long deltaX = cameraChunkX - centerChunkX;
             long deltaY = cameraChunkY - centerChunkY;
             long deltaZ = cameraChunkZ - centerChunkZ;
-            centerChunkX = cameraChunkX;
-            centerChunkY = cameraChunkY;
-            centerChunkZ = cameraChunkZ;
-            center.x = centerChunkX * chunkSizeMeters;
-            center.y = centerChunkY * chunkSizeMeters;
-            center.z = centerChunkZ * chunkSizeMeters;
+
+            setCenter(cameraPos);
+
+            updateHoleExtent();
 
             moveChunks(deltaX, deltaY, deltaZ);
 
@@ -125,13 +134,38 @@ public class DetailLevel {
         }
     }
 
+    private void updateHoleExtent() {
+        if (higherDetailLevel != null) {
+            // Notify higher detail level of the area where it can draw itself
+
+            int holeStartChunk = getHoleStartChunk();
+            getChunkCenter(holeStartChunk, holeStartChunk, holeStartChunk, holeStart);
+            holeStart.sub(chunkSizeMeters * 0.5f);
+
+            int holeEndChunk = getHoleEndChunk();
+            getChunkCenter(holeEndChunk, holeEndChunk, holeEndChunk, holeEnd);
+            holeEnd.add(chunkSizeMeters * 0.5f);
+
+            higherDetailLevel.setBoundingVolume(holeStart, holeEnd);
+        }
+    }
+
+    private void setBoundingVolume(Vector3 boundingVolumeStart, Vector3 boundingVolumeEnd) {
+        this.boundingVolumeStart = boundingVolumeStart;
+        this.boundingVolumeEnd = boundingVolumeEnd;
+    }
+
     public void render(ModelBatch modelBatch, Environment environment, ModelBuilder modelBuilder) {
 
-        for (int z = cacheMargin; z < storageSize - cacheMargin; z++) {
-            for (int y = cacheMargin; y < storageSize - cacheMargin; y++) {
-                for (int x = cacheMargin; x < storageSize - cacheMargin; x++) {
+        for (int z = 0; z < storageSize; z++) {
+            for (int y = 0; y < storageSize; y++) {
+                for (int x = 0; x < storageSize; x++) {
                     if (isVisible(x, y, z)) {
-                        getChunk(x, y, z).render(modelBatch, environment, center, modelBuilder);
+                        final Chunk chunk = getChunk(x, y, z);
+                        if (chunk != null) {
+                            chunk.render(modelBatch, environment, center, modelBuilder);
+                        }
+
                     }
                 }
             }
@@ -139,26 +173,52 @@ public class DetailLevel {
     }
 
     private boolean isVisible(int x, int y, int z) {
-        if (x < cacheMargin || x >= storageSize - cacheMargin ||
-            y < cacheMargin || y >= storageSize - cacheMargin ||
-            z < cacheMargin || z >= storageSize - cacheMargin) {
-            return false;
-        }
-
-        if (holeSize > 0) {
-            int center = storageSize / 2;
-            int holeStart = center - (holeSize/2);
-            int holeEnd = center + holeSize/2 + holeSize % 2;
-            if (x >= holeStart && x < holeEnd &&
-                y >= holeStart && y < holeEnd &&
-                z >= holeStart && z < holeEnd) {
+        // Check which edges overlap the lower detail level and leave them out
+        if (boundingVolumeStart != null && boundingVolumeEnd != null) {
+            getChunkCenter(x, y, z, temp);
+            if (temp.x < boundingVolumeStart.x || temp.x >= boundingVolumeEnd.x ||
+                temp.y < boundingVolumeStart.y || temp.y >= boundingVolumeEnd.y ||
+                temp.z < boundingVolumeStart.z || temp.z >= boundingVolumeEnd.z) {
                 return false;
             }
         }
 
+        // Don't render any chunks that should be rendered by a higher detail level
+        if (isInHole(x, y, z)) return false;
+
         return true;
     }
 
+    private boolean isInHole(int x, int y, int z) {
+        if (holeSize > 0) {
+            getChunkCenter(x, y, z, temp);
+            if (temp.x >= holeStart.x && temp.x < holeEnd.x &&
+                temp.y >= holeStart.y && temp.y < holeEnd.y &&
+                temp.z >= holeStart.z && temp.z < holeEnd.z) {
+                return true;
+            }
+
+            /*
+            int holeStart = getHoleStartChunk();
+            int holeEnd = getHoleEndChunk();
+            if (x >= holeStart && x < holeEnd &&
+                y >= holeStart && y < holeEnd &&
+                z >= holeStart && z < holeEnd) {
+                return true;
+            }
+            */
+        }
+        return false;
+    }
+
+    private int getHoleStartChunk() {
+        int center = storageSize / 2;
+        return center - holeSize / 2;
+    }
+
+    private int getHoleEndChunk() {
+        return getHoleStartChunk() + holeSize;
+    }
 
     private void moveChunks(long deltaX, long deltaY, long deltaZ) {
         // If we moved too much, just clear all chunks
@@ -208,6 +268,7 @@ public class DetailLevel {
         }
     }
 
+
     private void clearAllChunks() {
         for (int i = 0; i < chunks.length; i++) {
             if (chunks[i] != null) {
@@ -251,12 +312,13 @@ public class DetailLevel {
 
         Vector3 chunkCenter = new Vector3();
 
-        for (int z = cacheMargin; z < storageSize - cacheMargin; z++) {
-            for (int y = cacheMargin; y < storageSize - cacheMargin; y++) {
-                for (int x = cacheMargin; x < storageSize - cacheMargin; x++) {
+        for (int z = 0; z < storageSize; z++) {
+            for (int y = 0; y < storageSize; y++) {
+                for (int x = 0; x < storageSize; x++) {
                     final int chunkIndex = getChunkIndex(x, y, z);
                     if (chunkIndex > 0 &&
-                        chunks[chunkIndex] == null) {
+                        chunks[chunkIndex] == null &&
+                        isVisible(x, y, z)) {
 
                         // Generate new chunk if we didn't have any at this location
                         getChunkCenter(x, y, z, chunkCenter);
@@ -275,15 +337,32 @@ public class DetailLevel {
         }
     }
 
+    private void setCenter(Vector3 pos) {
+        centerChunkX = worldPosToChunk(pos.x);
+        centerChunkY = worldPosToChunk(pos.y);
+        centerChunkZ = worldPosToChunk(pos.z);
+
+        getChunkCenter(storageSize / 2,
+                       storageSize / 2,
+                       storageSize / 2,
+                       center);
+    }
+
     private void getChunkCenter(int x, int y, int z, Vector3 chunkCenterOut) {
-        chunkCenterOut.x = (centerChunkX + x - storageSize / 2) * chunkSizeMeters;
-        chunkCenterOut.y = (centerChunkY + y - storageSize / 2) * chunkSizeMeters;
-        chunkCenterOut.z = (centerChunkZ + z - storageSize / 2) * chunkSizeMeters;
+        chunkCenterOut.x = (0.5f + centerChunkX + x - storageSize / 2) * chunkSizeMeters;
+        chunkCenterOut.y = (0.5f + centerChunkY + y - storageSize / 2) * chunkSizeMeters;
+        chunkCenterOut.z = (0.5f + centerChunkZ + z - storageSize / 2) * chunkSizeMeters;
     }
 
     private long worldPosToChunk(final float v) {
+        float value = v / chunkSizeMeters;
+        long chunkCoordinate = value < 0.0f ? (long)(value - 1) : (long) value;
+        return chunkCoordinate;
+
+        /*
         float offset = isEven(holeSize) ? chunkSizeMeters : chunkSizeMeters*0.5f;
         return (long) Math.floor((v + offset) / chunkSizeMeters);
+        */
     }
 
     private boolean isEven(int x) {
@@ -294,7 +373,9 @@ public class DetailLevel {
     public void dispose() {
 
         for (Chunk chunk : chunks) {
-            chunk.dispose();
+            if (chunk != null) {
+                chunk.dispose();
+            }
         }
 
         for (int i = 0; i < chunks.length; i++) {

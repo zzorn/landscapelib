@@ -38,8 +38,8 @@ public class LandscapeViewer implements ApplicationListener {
 
     private VoxelLandscape voxelLandscape;
 
-    private static final int NUM_DETAIL_LEVELS = 10;
-    private static final float MOST_DETAILED_BLOCK_SIZE_METERS = 0.1f;
+    private static final int NUM_DETAIL_LEVELS = 12;
+    private static final float MOST_DETAILED_BLOCK_SIZE_METERS = 0.5f;
 
     public void create () {
 
