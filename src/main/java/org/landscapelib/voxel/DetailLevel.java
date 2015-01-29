@@ -1,6 +1,7 @@
 package org.landscapelib.voxel;
 
 import com.badlogic.gdx.graphics.Camera;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.math.Vector3;
@@ -11,6 +12,8 @@ import static org.flowutils.Check.notNull;
 /**
  *
  */
+// TODO: The loaded/visible edges have to match with the hole in the lower detail level
+// TODO: The center position has to match with the other detail levels as well.
 public class DetailLevel {
 
     private final Chunk[] chunks;
@@ -32,6 +35,11 @@ public class DetailLevel {
     private final int layerSize;
     private final int cacheMargin;
     private final int storageSize;
+
+    private Color debugColor1;
+    private Color debugColor2;
+
+    private boolean showDebugColor = true;
 
     /**
      * @param worldFunction function used to generate the world.
@@ -70,12 +78,17 @@ public class DetailLevel {
         chunks = new Chunk[storageSize * storageSize * storageSize];
         tempChunks = new Chunk[storageSize * storageSize * storageSize];
 
+        debugColor1 = new Color((chunkSizeMeters) / (chunkSizeMeters + 20f), 0.5f, 0f, 1f) ;
+        debugColor2 = debugColor1.cpy().lerp(Color.WHITE, 0.25f);
+
         // Initialize position
         final Vector3 cameraPos = camera.position;
         centerChunkX = worldPosToChunk(cameraPos.x);
         centerChunkY = worldPosToChunk(cameraPos.y);
         centerChunkZ = worldPosToChunk(cameraPos.z);
-        getChunkCenter(layerSize / 2, layerSize / 2, layerSize / 2, center);
+        center.x = centerChunkX * chunkSizeMeters;
+        center.y = centerChunkY * chunkSizeMeters;
+        center.z = centerChunkZ * chunkSizeMeters;
 
         generateMissingChunks();
     }
@@ -99,7 +112,9 @@ public class DetailLevel {
             centerChunkX = cameraChunkX;
             centerChunkY = cameraChunkY;
             centerChunkZ = cameraChunkZ;
-            getChunkCenter(layerSize / 2, layerSize / 2, layerSize / 2, center);
+            center.x = centerChunkX * chunkSizeMeters;
+            center.y = centerChunkY * chunkSizeMeters;
+            center.z = centerChunkZ * chunkSizeMeters;
 
             moveChunks(deltaX, deltaY, deltaZ);
 
@@ -127,11 +142,15 @@ public class DetailLevel {
             return false;
         }
 
-        int half = storageSize / 2;
-        if (x > half - holeSize && x <= half + holeSize &&
-            y > half - holeSize && y <= half + holeSize &&
-            z > half - holeSize && z <= half + holeSize) {
-            return false;
+        if (holeSize > 0) {
+            int center = storageSize / 2;
+            int holeStart = center - (holeSize/2);
+            int holeEnd = center + holeSize/2 + holeSize % 2;
+            if (x >= holeStart && x < holeEnd &&
+                y >= holeStart && y < holeEnd &&
+                z >= holeStart && z < holeEnd) {
+                return false;
+            }
         }
 
         return true;
@@ -143,9 +162,7 @@ public class DetailLevel {
         if (Math.abs(deltaX) >= storageSize ||
             Math.abs(deltaY) >= storageSize ||
             Math.abs(deltaZ) >= storageSize) {
-            for (int i = 0; i < chunks.length; i++) {
-                chunks[i] = null;
-            }
+            clearAllChunks();
         }
         else {
             // We use a temporary array when copying chunks, it's not optimal but it's not a significant memory hit and makes things simpler
@@ -177,12 +194,23 @@ public class DetailLevel {
             }
 
             // Copy results over
-            System.arraycopy(tempChunks, 0, chunks, 0, chunks.length);
+            for (int i = 0; i < chunks.length; i++) {
+                chunks[i] = tempChunks[i];
+            }
 
             // Clear temp array
             for (int i = 0; i < tempChunks.length; i++) {
                 tempChunks[i] = null;
             }
+        }
+    }
+
+    private void clearAllChunks() {
+        for (int i = 0; i < chunks.length; i++) {
+            if (chunks[i] != null) {
+                chunkManager.releaseChunk(chunks[i]);
+            }
+            chunks[i] = null;
         }
     }
 
@@ -229,7 +257,14 @@ public class DetailLevel {
 
                         // Generate new chunk if we didn't have any at this location
                         getChunkCenter(x, y, z, chunkCenter);
-                        chunks[chunkIndex] = chunkManager.generateChunk(chunkCenter, chunkSizeMeters);
+                        final Chunk newChunk = chunkManager.generateChunk(chunkCenter, chunkSizeMeters);
+                        if (showDebugColor) {
+                            // != is identical to xor when applied to booleans.
+                            Color color = (isEven(x) != (isEven(y))) != (isEven(z)) ? debugColor1 : debugColor2;
+                            newChunk.setDebugColor(color);
+                        }
+
+                        chunks[chunkIndex] = newChunk;
                     }
 
                 }
@@ -244,7 +279,12 @@ public class DetailLevel {
     }
 
     private long worldPosToChunk(final float v) {
-        return (long) Math.floor(v / chunkSizeMeters);
+        float offset = isEven(holeSize) ? chunkSizeMeters : chunkSizeMeters*0.5f;
+        return (long) Math.floor((v + offset) / chunkSizeMeters);
+    }
+
+    private boolean isEven(int x) {
+        return (x % 2) == 0;
     }
 
 

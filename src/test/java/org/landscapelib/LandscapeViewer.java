@@ -11,7 +11,9 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.CameraInputController;
+import com.badlogic.gdx.graphics.g3d.utils.FirstPersonCameraController;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.math.Vector3;
 import org.landscapelib.voxel.ChunkManager;
 import org.landscapelib.voxel.TestWorldFunction;
 import org.landscapelib.voxel.VoxelLandscape;
@@ -22,18 +24,22 @@ import org.landscapelib.voxel.WorldFunction;
  */
 public class LandscapeViewer implements ApplicationListener {
 
+    private static final int VELOCITY_M_PER_SECOND = 10;
     public PerspectiveCamera cam;
     public ModelBatch modelBatch;
     public Model model;
     public ModelInstance instance;
     public Environment environment;
-    public CameraInputController camController;
+    public FirstPersonCameraController camController;
 
     private WorldFunction worldFunction;
 
     private ChunkManager chunkManager;
 
     private VoxelLandscape voxelLandscape;
+
+    private static final int NUM_DETAIL_LEVELS = 5;
+    private static final int MOST_DETAILED_CHUNK_SIZE_METERS = 8;
 
     public void create () {
 
@@ -45,22 +51,21 @@ public class LandscapeViewer implements ApplicationListener {
 
         // Setup camera
         cam = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        cam.position.set(10f, 10f, 10f);
-        cam.lookAt(0,0,0);
-        cam.near = 1f;
-        cam.far = 300f;
+        cam.position.set(0f, 0f, 0f);
+        cam.lookAt(1,0,0);
+        cam.near = 0.2f;
+        cam.far = 100000f;
         cam.update();
 
         // Setup voxel landscape
         chunkManager = new ChunkManager(new TestWorldFunction());
         System.out.println("Starting chunk generation");
-        final int mostDetailedChunkSizeMeters = 10;
-        final int numDetailLevels = 5;
-        voxelLandscape = new VoxelLandscape(numDetailLevels, mostDetailedChunkSizeMeters, worldFunction, cam, chunkManager);
+        voxelLandscape = new VoxelLandscape(NUM_DETAIL_LEVELS,
+                                            MOST_DETAILED_CHUNK_SIZE_METERS, worldFunction, cam, chunkManager);
         System.out.println("Chunk generation done");
 
 
-        // Create test model
+        // Create reference test model
         ModelBuilder modelBuilder = new ModelBuilder();
         model = modelBuilder.createBox(1, 1, 1,
                                        new Material(ColorAttribute.createDiffuse(Color.ORANGE)),
@@ -69,7 +74,7 @@ public class LandscapeViewer implements ApplicationListener {
 
         // Create instance of model to render
         instance = new ModelInstance(model);
-        instance.transform.translate(22, 22, 22);
+        instance.transform.translate(0, 0, 0);
 
         // Setup lighting
         environment = new Environment();
@@ -77,8 +82,54 @@ public class LandscapeViewer implements ApplicationListener {
         environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f, -0.8f, -0.2f));
 
         // Setup camera control
-        camController = new CameraInputController(cam);
+        camController = createDebugCameraController();
+
         Gdx.input.setInputProcessor(camController);
+    }
+
+    private FirstPersonCameraController createDebugCameraController() {
+        return new FirstPersonCameraController(cam) {
+            private float degreesPerPixel = 0.5f;
+            private Vector3 temp = new Vector3();
+            private float accelerationMetersPerSecondPerSecond = 1;
+            private float defaultSpeedMetersPerSecond = VELOCITY_M_PER_SECOND;
+            private float maxVelocityMetersPerSecond = 1000;
+            private float velocity = defaultSpeedMetersPerSecond;
+
+            @Override public boolean touchDragged(int screenX, int screenY, int pointer) {
+                float deltaX = -Gdx.input.getDeltaX() * degreesPerPixel;
+                float deltaY = -Gdx.input.getDeltaY() * degreesPerPixel;
+
+                // This fixes up to always be up on the screen
+                cam.up.set(0, 1, 0);
+
+                cam.direction.rotate(cam.up, deltaX);
+
+                temp.set(cam.direction).crs(cam.up).nor();
+                cam.direction.rotate(temp, deltaY);
+
+                return true;
+
+            }
+
+            @Override public void update(float deltaTime) {
+                Vector3 oldPos = cam.position.cpy();
+                super.update(deltaTime);
+
+                if (cam.position.dst2(oldPos) > 0.000001f) {
+                    // We moved, accelerate while key held down
+                    if (velocity < maxVelocityMetersPerSecond) {
+                        velocity += accelerationMetersPerSecondPerSecond;
+                    }
+                }
+                else {
+                    // Remove acceleration
+                    velocity = defaultSpeedMetersPerSecond;
+                }
+                setVelocity(velocity);
+
+            }
+        };
     }
 
     public void render () {

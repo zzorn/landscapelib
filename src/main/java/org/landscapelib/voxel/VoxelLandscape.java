@@ -20,9 +20,9 @@ public class VoxelLandscape {
     private final Camera camera;
     private final ChunkManager chunkManager;
 
-    private static final int LAYER_SIZE = 3;
+    private static final int LAYER_SIZE = 6;
     private static final int MARGIN_SIZE = 1;
-    private static final int HOLE_SIZE = 1;
+    private static final int HOLE_SIZE = 3;
 
     public VoxelLandscape(int numDetailLevels,
                           float mostDetailedChunkSizeMeters,

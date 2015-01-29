@@ -18,7 +18,7 @@ public class ChunkManager {
 
     private ModelBuilder modelBuilder = new ModelBuilder();
 
-    private final Pool<Chunk> chunkPool = new Pool<Chunk>() {
+    private final Pool<Chunk> chunkPool = new Pool<Chunk>(100, 200) {
         @Override protected Chunk newObject() {
             return new Chunk(modelBuilder);
         }
@@ -34,49 +34,17 @@ public class ChunkManager {
 
         chunk.initialize(chunkCenter, chunkSizeMeters, worldFunction);
 
+        //System.out.println("ChunkManager.generateChunk");
+        //System.out.println("pooled chunks = " + chunkPool.getFree());
+
         return chunk;
     }
 
     public void releaseChunk(Chunk chunkToRelease) {
         chunks.removeValue(chunkToRelease, true);
         chunkPool.free(chunkToRelease);
+
+        //System.out.println("ChunkManager.releaseChunk");
     }
 
-
-    public void createTestStuff() {
-
-        Vector3 origo = new Vector3();
-        Vector3 v = new Vector3();
-
-        float chunkSizeInMeters = 8;
-
-        int start = -5;
-        int end =  5;
-        for (int z = start; z < end; z++) {
-            for (int y = start; y < end; y++) {
-                for (int x = start; x < end; x++) {
-
-                    v.set(origo);
-                    v.x += x * chunkSizeInMeters;
-                    v.y += y * chunkSizeInMeters;
-                    v.z += z * chunkSizeInMeters;
-
-                    Chunk chunk = new Chunk(modelBuilder);
-
-                    generateChunk(v, chunkSizeInMeters, chunk);
-
-                    chunks.add(chunk);
-                }
-            }
-        }
-
-    }
-
-
-    private void generateChunk(Vector3 center, float chunkSizeInMeters, Chunk chunk) {
-
-        chunk.setCenter(center);
-        chunk.setChunkSizeInMeters(chunkSizeInMeters);
-        chunk.generate(worldFunction);
-    }
 }

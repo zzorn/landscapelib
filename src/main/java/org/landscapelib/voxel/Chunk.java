@@ -64,6 +64,11 @@ public final class Chunk implements Pool.Poolable{
         if ((this.hashCode() % 2) == 0) this.blockMaterial =  new Material(ColorAttribute.createDiffuse(Color.RED));
     }
 
+    public void setDebugColor(Color color) {
+        blockMaterial = new Material(ColorAttribute.createDiffuse(color));
+        modelNeedsRegeneration = true;
+    }
+
     /**
      * Initializes a chunk and generates the data for it.
      *
