@@ -2,20 +2,18 @@ package org.landscapelib.voxel;
 
 import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Mesh;
 import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Vector3;
 import org.flowutils.Check;
-import org.flowutils.MathUtils;
 
 import static org.flowutils.Check.notNull;
 
 /**
  *
  */
-// TODO: The loaded/visible edges have to match with the hole in the lower detail level
-// TODO: The center position has to match with the other detail levels as well.
 public class DetailLevel {
 
     private final Chunk[] chunks;
@@ -52,6 +50,8 @@ public class DetailLevel {
 
     private Vector3 temp = new Vector3();
 
+    private final ChunkMeshGenerator chunkMeshGenerator;
+
 
     /**
      * @param worldFunction function used to generate the world.
@@ -61,6 +61,7 @@ public class DetailLevel {
      * @param layerSize visible size of this detail level along the edges, in number of chunks.  Includes eventual hole size.
      * @param holeSize size of hole left in the middle of this detail layer for higher detail layers,
      * @param cacheMargin size of the margin around the visible area potentially containing cached chunks, in number of chunks.
+     * @param chunkMeshGenerator used to create meshes for chunks.
      */
     public DetailLevel(WorldFunction worldFunction,
                        Camera camera,
@@ -70,10 +71,13 @@ public class DetailLevel {
                        int holeSize,
                        int levelOfDetailMargin,
                        int cacheMargin,
-                       DetailLevel higherDetailLevel) {
+                       DetailLevel higherDetailLevel,
+                       ChunkMeshGenerator chunkMeshGenerator) {
         notNull(worldFunction, "worldFunction");
         notNull(camera, "camera");
         notNull(chunkManager, "chunkManager");
+        notNull(chunkMeshGenerator, "chunkMeshGenerator");
+
         Check.positive(chunkSizeMeters, "chunkSizeMeters");
         Check.positive(layerSize, "layerSize");
         Check.positiveOrZero(holeSize, "holeSize");
@@ -81,6 +85,7 @@ public class DetailLevel {
         Check.positiveOrZero(levelOfDetailMargin, "levelOfDetailMargin");
         Check.greater(layerSize, "layerSize", holeSize, "holeSize");
 
+        this.chunkMeshGenerator = chunkMeshGenerator;
         this.higherDetailLevel = higherDetailLevel;
         this.worldFunction = worldFunction;
         this.camera = camera;
@@ -155,21 +160,35 @@ public class DetailLevel {
         this.boundingVolumeEnd = boundingVolumeEnd;
     }
 
-    public void render(ModelBatch modelBatch, Environment environment, ModelBuilder modelBuilder) {
+    public void render(ModelBatch modelBatch, Environment environment) {
 
         for (int z = 0; z < storageSize; z++) {
             for (int y = 0; y < storageSize; y++) {
                 for (int x = 0; x < storageSize; x++) {
                     if (isVisible(x, y, z)) {
                         final Chunk chunk = getChunk(x, y, z);
-                        if (chunk != null) {
-                            chunk.render(modelBatch, environment, center, modelBuilder);
+                        // Do not render all-air chunks
+                        if (chunk != null && !chunk.isAllAir()) {
+                            // Do not render solid chunks that are surrounded by solid chunks on all sides
+                            if (!isSolidChunkSurroundedBySolidChunks(z, y, x, chunk)) {
+                                chunk.render(modelBatch, environment, chunkMeshGenerator);
+                            }
                         }
 
                     }
                 }
             }
         }
+    }
+
+    private boolean isSolidChunkSurroundedBySolidChunks(int z, int y, int x, Chunk chunk) {
+        return chunk.isAllSolid() &&
+            isAllSolidChunk(x-1, y, z) &&
+            isAllSolidChunk(x+1, y, z) &&
+            isAllSolidChunk(x, y-1, z) &&
+            isAllSolidChunk(x, y+1, z) &&
+            isAllSolidChunk(x, y, z-1) &&
+            isAllSolidChunk(x, y, z+1);
     }
 
     private boolean isVisible(int x, int y, int z) {
@@ -303,6 +322,26 @@ public class DetailLevel {
         }
         else {
             return chunks[x + y * storageSize + z * storageSize * storageSize];
+        }
+    }
+
+    /**
+     * @return true if the specified chunk is all solid, or is outside the storage range.
+     */
+    private boolean isAllSolidChunk(int x, int y, int z) {
+        if (x < 0 || x >= storageSize ||
+            y < 0 || y >= storageSize ||
+            z < 0 || z >= storageSize) {
+            return true;
+        }
+        else {
+            final Chunk chunk = getChunk(x, y, z);
+            if (chunk == null) {
+                return true;
+            }
+            else {
+                return chunk.isAllSolid();
+            }
         }
     }
 

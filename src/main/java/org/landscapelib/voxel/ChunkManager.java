@@ -20,6 +20,17 @@ public class ChunkManager {
         @Override protected Chunk newObject() {
             return new Chunk();
         }
+
+        @Override public void free(Chunk chunk) {
+            int previousNumberOfPooledChunks = getFree();
+
+            super.free(chunk);
+
+            if (getFree() == previousNumberOfPooledChunks) {
+                // The chunk was not pooled, dispose it
+                chunk.dispose();
+            }
+        }
     };
 
     public ChunkManager(WorldFunction worldFunction) {

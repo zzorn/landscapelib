@@ -38,8 +38,6 @@ public class LandscapeViewer implements ApplicationListener {
 
     private VoxelLandscape voxelLandscape;
 
-    private static final int NUM_DETAIL_LEVELS = 12;
-    private static final float MOST_DETAILED_BLOCK_SIZE_METERS = 0.5f;
 
     public void create () {
 
@@ -60,8 +58,7 @@ public class LandscapeViewer implements ApplicationListener {
         // Setup voxel landscape
         chunkManager = new ChunkManager(new TestWorldFunction());
         System.out.println("Starting chunk generation");
-        voxelLandscape = new VoxelLandscape(NUM_DETAIL_LEVELS,
-                                            MOST_DETAILED_BLOCK_SIZE_METERS, worldFunction, cam, chunkManager);
+        voxelLandscape = new VoxelLandscape(worldFunction, cam, chunkManager);
         System.out.println("Chunk generation done");
 
 

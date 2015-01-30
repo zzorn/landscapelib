@@ -16,7 +16,7 @@ public class TestWorldFunction implements WorldFunction {
 
     @Override public byte getTerrainType(Vector3 worldPos, double scale) {
         double scale1 = 0.002;
-        double scale2 = 0.02;
+        double scale2 = 0.07;
         double scale3 = 0.1;
         double density1 = noise.sdnoise3(worldPos.x * scale1,
                                          worldPos.y * scale1,
@@ -24,16 +24,17 @@ public class TestWorldFunction implements WorldFunction {
         double density2 = noise.sdnoise3(worldPos.x * scale2 + 3123,
                                          worldPos.y * scale2 + 434.3,
                                          worldPos.z * scale2 + 123.321);
+        /*
         double density3 = noise.sdnoise3(worldPos.x * scale3 + 1234,
                                          worldPos.y * scale3 +3542,
                                          worldPos.z * scale3 +23);
-
+*/
         double planetDensity = planetRadiusMeters - planetCenter.dst(worldPos);
 
         double density = planetDensity +
                          density1 * 200 +
-                         density2 * 44 +
-                         density3 * 6;
+                         density2 * 2 /*+
+                         density3 * 6*/;
 
 
 

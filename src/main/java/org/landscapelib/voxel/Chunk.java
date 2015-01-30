@@ -2,10 +2,10 @@ package org.landscapelib.voxel;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Mesh;
 import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
-import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Pool;
@@ -21,10 +21,10 @@ public final class Chunk implements Pool.Poolable{
      * Must be a power of two.
      */
     public final static int CHUNK_SIZE = 8;
-
-    // NOTE: Update these as well if chunk size is changed:
-    private final static int CHUNK_SIZE_MASK = CHUNK_SIZE - 1;
+    // NOTE: Update this as well if chunk size is changed:
     private final static int CHUNK_SIZE_SHIFT = 3;
+
+    private final static int CHUNK_SIZE_MASK = CHUNK_SIZE - 1;
 
     public static final byte AIR_TYPE = 0;
 
@@ -37,12 +37,18 @@ public final class Chunk implements Pool.Poolable{
 
     private static final int BLOCK_ATTRIBUTES = VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal;
 
+    private static final ModelBuilder MODEL_BUILDER = new ModelBuilder();
+
     private Vector3 center = new Vector3();
     private float chunkSizeInMeters = 1;
     private byte[] blockTypes = new byte[BLOCK_COUNT];
-    private boolean modelNeedsRegeneration = false;
+    private boolean modelNeedsRegeneration = true;
     private ModelInstance modelInstance;
+    private Mesh mesh;
     private Material blockMaterial = DEFAULT_MATERIAL;
+
+    private boolean allSolid;
+    private boolean allAir;
 
     public Chunk() {
     }
@@ -59,10 +65,14 @@ public final class Chunk implements Pool.Poolable{
      * @param chunkSizeInMeters size of the whole chunk along each side, in world units.
      * @param worldFunction landscape function to use for generating the chunk.
      */
-    public void initialize(Vector3 center, float chunkSizeInMeters, WorldFunction worldFunction) {
+    public void initialize(Vector3 center,
+                           float chunkSizeInMeters,
+                           WorldFunction worldFunction) {
         setCenter(center);
         setChunkSizeInMeters(chunkSizeInMeters);
-        generate(worldFunction);
+
+        // Get density data
+        calculateDensityData(worldFunction);
     }
 
     /**
@@ -81,6 +91,10 @@ public final class Chunk implements Pool.Poolable{
 
     public float getChunkSizeInMeters() {
         return chunkSizeInMeters;
+    }
+
+    public float getBlockSizeInMeters() {
+        return chunkSizeInMeters / CHUNK_SIZE;
     }
 
     public void setChunkSizeInMeters(float chunkSizeInMeters) {
@@ -122,9 +136,12 @@ public final class Chunk implements Pool.Poolable{
         return modelNeedsRegeneration;
     }
 
-    public void generate(WorldFunction worldFunction) {
+    public void calculateDensityData(WorldFunction worldFunction) {
         Vector3 blockPos = new Vector3();
         double blockSize = chunkSizeInMeters / CHUNK_SIZE;
+
+        allSolid = true;
+        allAir = true;
 
         for (int z = 0; z < CHUNK_SIZE; z++) {
             for (int y = 0; y < CHUNK_SIZE; y++) {
@@ -135,7 +152,16 @@ public final class Chunk implements Pool.Poolable{
                     blockPos.add(center);
 
                     final int index = calculateBlockIndex(x, y, z);
-                    blockTypes[index] = worldFunction.getTerrainType(blockPos, blockSize);
+                    final byte terrainType = worldFunction.getTerrainType(blockPos, blockSize);
+                    blockTypes[index] = terrainType;
+
+                    // Determine if all blocks in a chunk are solid or air.
+                    if (terrainType == AIR_TYPE) {
+                        allSolid = false;
+                    }
+                    else {
+                        allAir = false;
+                    }
                 }
             }
         }
@@ -143,94 +169,65 @@ public final class Chunk implements Pool.Poolable{
         modelNeedsRegeneration = true;
     }
 
+    public boolean isAllSolid() {
+        return allSolid;
+    }
 
-    public ModelInstance getModelInstance(ModelBuilder modelBuilder) {
+    public boolean isAllAir() {
+        return allAir;
+    }
+
+    public ModelInstance getModelInstance(ChunkMeshGenerator chunkMeshGenerator) {
         if (modelInstance == null || modelNeedsRegeneration) {
-            modelInstance = createModelInstance(modelBuilder);
+            modelInstance = generateMesh(chunkMeshGenerator);
             modelNeedsRegeneration = false;
         }
 
         return modelInstance;
     }
 
-    @Override public void reset() {
-        clearOldModel();
-    }
+    private ModelInstance generateMesh(ChunkMeshGenerator chunkMeshGenerator) {
 
-    private ModelInstance createModelInstance(ModelBuilder modelBuilder) {
+        // Generate mesh for this chunk
+        Mesh newMesh = chunkMeshGenerator.updateMesh(this, mesh);
 
-        clearOldModel();
-
-        // Create model
-
-        /*
-        Model model = modelBuilder.createBox(scale, scale, scale,
-                                             BLOCK_MATERIAL,
-                                             BLOCK_ATTRIBUTES);
-                                             */
-
-        modelBuilder.begin();
-        final MeshPartBuilder meshBuilder = modelBuilder.part("chunk",
-                                                              GL20.GL_TRIANGLES,
-                                                              BLOCK_ATTRIBUTES,
-                                                              blockMaterial);
-
-        Vector3 blockPos = new Vector3();
-        float blockSizeInMeters = chunkSizeInMeters / CHUNK_SIZE;
-
-        for (int z = 0; z < CHUNK_SIZE; z++) {
-            for (int y = 0; y < CHUNK_SIZE; y++) {
-                for (int x = 0; x < CHUNK_SIZE; x++) {
-
-                    final int index = calculateBlockIndex(x, y, z);
-
-                    byte blockType = blockTypes[index];
-
-                    getChunkLocalBlockCenter(blockPos, x, y, z);
-
-                    if (blockType != AIR_TYPE) {
-
-                        // Optimization: if all neighbour blocks in the chunk are solid, there is no need to render this.
-                        // If the block is at an chunk edge, we need to render it.
-                        if (x == 0 || x == CHUNK_SIZE - 1 ||
-                            y == 0 || y == CHUNK_SIZE - 1 ||
-                            z == 0 || z == CHUNK_SIZE - 1 ||
-                            !isSolid(x-1, y, z) ||
-                            !isSolid(x+1, y, z) ||
-                            !isSolid(x, y-1, z) ||
-                            !isSolid(x, y+1, z) ||
-                            !isSolid(x, y, z-1) ||
-                            !isSolid(x, y, z+1)) {
-
-                            meshBuilder.box(blockPos.x, blockPos.y, blockPos.z,
-                                            blockSizeInMeters, blockSizeInMeters, blockSizeInMeters);
-                        }
-                    }
-                }
-            }
+        // Dispose old mesh if a new mesh was generated instead of updating an old one
+        if (newMesh != mesh && mesh != null) {
+            mesh.dispose();
         }
 
+        mesh = newMesh;
 
-        Model model = modelBuilder.end();
+        // We create a new model and model instance each time,
+        // as it seems to be complicated to just update the mesh and material of a model.
+        return createModelInstance(mesh);
+    }
 
+    private ModelInstance createModelInstance(final Mesh mesh) {
 
-        // Create instance of model to render
-        final ModelInstance modelInstance = new ModelInstance(model);
+        // Create Model from mesh and material
+        MODEL_BUILDER.begin();
+        MODEL_BUILDER.part("chunk", mesh, GL20.GL_TRIANGLES, blockMaterial);
+        final Model model = MODEL_BUILDER.end();
 
-        // Position it
-        modelInstance.transform.translate(center);
+        // Create model instance
+        ModelInstance modelInstance = new ModelInstance(model);
+
+        // Update position
+        modelInstance.transform.setTranslation(center);
 
         return modelInstance;
     }
 
-    private void clearOldModel() {
-        dispose();
 
+    @Override public void reset() {
         modelNeedsRegeneration = true;
     }
 
-    public void render(ModelBatch modelBatch, Environment environment, Vector3 offset, ModelBuilder modelBuilder) {
-        final ModelInstance modelInstance = getModelInstance(modelBuilder);
+    public void render(ModelBatch modelBatch,
+                       Environment environment,
+                       ChunkMeshGenerator chunkMeshGenerator) {
+        final ModelInstance modelInstance = getModelInstance(chunkMeshGenerator);
 
         //tempMatrix.set(modelInstance.transform);
 
