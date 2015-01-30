@@ -10,8 +10,12 @@ import com.badlogic.gdx.graphics.VertexAttributes;
 public class ChunkMeshGenerator {
 
     private static final int VERTEXES_PER_SIDE = Chunk.CHUNK_SIZE + 1;
-    private static final int MAX_VERTEXES = 8 * VERTEXES_PER_SIDE * VERTEXES_PER_SIDE * VERTEXES_PER_SIDE;
-    private static final int MAX_INDEXES = 3 * 6 * 2 * Chunk.CHUNK_SIZE * Chunk.CHUNK_SIZE * Chunk.CHUNK_SIZE;
+    private static final int MAX_VERTEXES = 8 // 8 possible neighboring blocks for each vertex
+                                            * VERTEXES_PER_SIDE * VERTEXES_PER_SIDE * VERTEXES_PER_SIDE; // (chunk size + 1) ^ 3 vertexes.
+    private static final int MAX_INDEXES = 3 // Triangles
+                                           * 2 // 2 triangles per side
+                                           * 6 // 6 sides per block
+                                           * Chunk.CHUNK_SIZE * Chunk.CHUNK_SIZE * Chunk.CHUNK_SIZE; // Chunk size ^ 3 blocks
 
     private static final VertexAttributes VERTEX_ATTRIBUTES = new VertexAttributes(VertexAttribute.Position(),
                                                                                    VertexAttribute.Normal(),

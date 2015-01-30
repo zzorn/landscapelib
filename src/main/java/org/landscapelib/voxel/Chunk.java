@@ -35,8 +35,6 @@ public final class Chunk implements Pool.Poolable{
 
     private static final Material DEFAULT_MATERIAL = new Material(ColorAttribute.createDiffuse(Color.GREEN));
 
-    private static final int BLOCK_ATTRIBUTES = VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal;
-
     private static final ModelBuilder MODEL_BUILDER = new ModelBuilder();
 
     private Vector3 center = new Vector3();

@@ -216,16 +216,6 @@ public class DetailLevel {
                 temp.z >= holeStart.z && temp.z < holeEnd.z) {
                 return true;
             }
-
-            /*
-            int holeStart = getHoleStartChunk();
-            int holeEnd = getHoleEndChunk();
-            if (x >= holeStart && x < holeEnd &&
-                y >= holeStart && y < holeEnd &&
-                z >= holeStart && z < holeEnd) {
-                return true;
-            }
-            */
         }
         return false;
     }

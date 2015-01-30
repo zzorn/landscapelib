@@ -14,9 +14,7 @@ public class ChunkManager {
 
     private final WorldFunction worldFunction;
 
-    private ModelBuilder modelBuilder = new ModelBuilder();
-
-    private final Pool<Chunk> chunkPool = new Pool<Chunk>(100, 200) {
+    private final Pool<Chunk> chunkPool = new Pool<Chunk>(100, 10000) {
         @Override protected Chunk newObject() {
             return new Chunk();
         }
