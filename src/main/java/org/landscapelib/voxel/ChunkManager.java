@@ -8,6 +8,10 @@ import com.badlogic.gdx.utils.Pool;
 /**
  *
  */
+// TODO: Add executor, chunk density calculation tasks,
+// TODO   and a step to voxel landscape where visibility of chunks is updated based on whether more detailed chunks have finished calculating their density
+// TODO: Also determine if a chunk is at the edge of the visible area when a LOD is moved/generated, if so, update the mesh to merge with a lower lod along the appropriate sides (store lower lod sides in a byte as bit flags?)
+// TODO: Do not generate solid surfaces along chunk edges.  Marching cubes should help with that.
 public class ChunkManager {
 
     private final Array<Chunk> chunks = new Array<Chunk>();

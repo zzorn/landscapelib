@@ -23,7 +23,7 @@ public class VoxelLandscape {
     private static final int MARGIN_SIZE = 0;
     private static final int HOLE_SIZE = 4;
 
-    private static final int DEFAULT_DETAIL_LEVELS = 12;
+    private static final int DEFAULT_DETAIL_LEVELS = 15;
     private static final float DEFAULT_MOST_DETAILED_BLOCK_SIZE_METERS = 0.5f;
 
     private final ModelBuilder modelBuilder = new ModelBuilder();

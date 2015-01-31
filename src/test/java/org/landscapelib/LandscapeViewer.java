@@ -2,6 +2,7 @@ package org.landscapelib;
 
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplication;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
@@ -88,17 +89,33 @@ public class LandscapeViewer implements ApplicationListener {
         return new FirstPersonCameraController(cam) {
             private float degreesPerPixel = 0.5f;
             private Vector3 temp = new Vector3();
+            private Vector3 upwards = new Vector3(0,1,0);
             private float accelerationMetersPerSecondPerSecond = 1;
             private float defaultSpeedMetersPerSecond = VELOCITY_M_PER_SECOND;
             private float maxVelocityMetersPerSecond = 1000;
             private float velocity = defaultSpeedMetersPerSecond;
 
+            private boolean turboBoost = false;
+            private static final int TURBO_BOOST_KEY = Input.Keys.SHIFT_LEFT;
+
+            @Override public boolean keyDown(int keycode) {
+                if (keycode == TURBO_BOOST_KEY) turboBoost = true;
+
+                return super.keyDown(keycode);
+            }
+
+            @Override public boolean keyUp(int keycode) {
+                if (keycode == TURBO_BOOST_KEY) turboBoost = false;
+
+                return super.keyUp(keycode);
+            }
+
             @Override public boolean touchDragged(int screenX, int screenY, int pointer) {
                 float deltaX = -Gdx.input.getDeltaX() * degreesPerPixel;
                 float deltaY = -Gdx.input.getDeltaY() * degreesPerPixel;
 
-                // This fixes up to always be up on the screen
-                cam.up.set(0, 1, 0);
+                // This fixes up to always be away from planet center
+                cam.up.set(upwards);
 
                 cam.direction.rotate(cam.up, deltaX);
 
@@ -110,13 +127,21 @@ public class LandscapeViewer implements ApplicationListener {
             }
 
             @Override public void update(float deltaTime) {
+
+                // Upwards vector is away from gracitation center.
+                upwards.set(cam.position).sub(worldFunction.getGravitationCenter()).nor();
+
                 Vector3 oldPos = cam.position.cpy();
                 super.update(deltaTime);
 
                 if (cam.position.dst2(oldPos) > 0.000001f) {
                     // We moved, accelerate while key held down
                     if (velocity < maxVelocityMetersPerSecond) {
-                        velocity += accelerationMetersPerSecondPerSecond;
+                        velocity += accelerationMetersPerSecondPerSecond * deltaTime;
+                    }
+
+                    if (turboBoost) {
+                        velocity *= 1 + 2f * deltaTime;
                     }
                 }
                 else {

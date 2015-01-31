@@ -13,6 +13,9 @@ public class TestWorldFunction implements WorldFunction {
     private float planetRadiusMeters = 10000;
     private Vector3 planetCenter = new Vector3(0, -planetRadiusMeters, 0);
 
+    @Override public Vector3 getGravitationCenter() {
+        return planetCenter;
+    }
 
     @Override public byte getTerrainType(Vector3 worldPos, double scale) {
         double scale1 = 0.002;
