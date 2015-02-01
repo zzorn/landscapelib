@@ -9,11 +9,15 @@ public interface WorldFunction {
 
     Vector3 getGravitationCenter();
 
-    /**
-     * @param worldPos position to get terrain type at.
-     * @return terrainType at the specified world position.
-     */
-    byte getTerrainType(Vector3 worldPos, double scale);
-
+    void calculateChunk(byte[] primaryMaterial,
+                        byte[] secondaryMaterial,
+                        byte[] materialRatio,
+                        byte[] volume,
+                        double centerX,
+                        double centerY,
+                        double centerZ,
+                        int dataPointsAlongEachAxis,
+                        double dataPointDistanceMeters,
+                        WorldGenerationListener listener);
 
 }

@@ -25,7 +25,7 @@ import org.landscapelib.voxel.WorldFunction;
  */
 public class LandscapeViewer implements ApplicationListener {
 
-    private static final int VELOCITY_M_PER_SECOND = 1;
+    private static final int VELOCITY_M_PER_SECOND = 10;
     public PerspectiveCamera cam;
     public ModelBatch modelBatch;
     public Model model;
@@ -90,7 +90,7 @@ public class LandscapeViewer implements ApplicationListener {
             private float degreesPerPixel = 0.5f;
             private Vector3 temp = new Vector3();
             private Vector3 upwards = new Vector3(0,1,0);
-            private float accelerationMetersPerSecondPerSecond = 1;
+            private float accelerationMetersPerSecondPerSecond = 2;
             private float defaultSpeedMetersPerSecond = VELOCITY_M_PER_SECOND;
             private float maxVelocityMetersPerSecond = 1000;
             private float velocity = defaultSpeedMetersPerSecond;
@@ -99,13 +99,24 @@ public class LandscapeViewer implements ApplicationListener {
             private static final int TURBO_BOOST_KEY = Input.Keys.SHIFT_LEFT;
 
             @Override public boolean keyDown(int keycode) {
-                if (keycode == TURBO_BOOST_KEY) turboBoost = true;
+                if (keycode == TURBO_BOOST_KEY) {
+                    if (!turboBoost) {
+                        velocity += 100;
+                    }
+                    turboBoost = true;
+                }
 
                 return super.keyDown(keycode);
             }
 
             @Override public boolean keyUp(int keycode) {
-                if (keycode == TURBO_BOOST_KEY) turboBoost = false;
+                if (keycode == TURBO_BOOST_KEY) {
+                    if (turboBoost) {
+                        velocity -= 100;
+                        if (velocity < 0) velocity = 0;
+                    }
+                    turboBoost = false;
+                }
 
                 return super.keyUp(keycode);
             }
@@ -136,12 +147,9 @@ public class LandscapeViewer implements ApplicationListener {
 
                 if (cam.position.dst2(oldPos) > 0.000001f) {
                     // We moved, accelerate while key held down
-                    if (velocity < maxVelocityMetersPerSecond) {
+                    if (velocity < maxVelocityMetersPerSecond && turboBoost) {
                         velocity += accelerationMetersPerSecondPerSecond * deltaTime;
-                    }
-
-                    if (turboBoost) {
-                        velocity *= 1 + 2f * deltaTime;
+                        velocity *= 1 + 0.2f * deltaTime;
                     }
                 }
                 else {

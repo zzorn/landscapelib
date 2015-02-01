@@ -2,10 +2,8 @@ package org.landscapelib.voxel;
 
 import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.Mesh;
 import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Vector3;
 import org.flowutils.Check;
 
@@ -352,9 +350,13 @@ public class DetailLevel {
                         // Generate new chunk if we didn't have any at this location
                         getChunkCenter(x, y, z, chunkCenter);
                         final Chunk newChunk = chunkManager.generateChunk(chunkCenter, chunkSizeMeters);
+
                         if (showDebugColor) {
-                            // != is identical to xor when applied to booleans.
-                            Color color = (isEven(x) != (isEven(y))) != (isEven(z)) ? debugColor1 : debugColor2;
+                            long chunkWorldX = worldPosToChunk(chunkCenter.x);
+                            long chunkWorldY = worldPosToChunk(chunkCenter.y);
+                            long chunkWorldZ = worldPosToChunk(chunkCenter.z);
+                            boolean checkers3D = isEven(chunkWorldX) == isEven(chunkWorldY) == isEven(chunkWorldZ);
+                            Color color = checkers3D ? debugColor1 : debugColor2;
                             newChunk.setDebugColor(color);
                         }
 
@@ -394,8 +396,12 @@ public class DetailLevel {
         */
     }
 
-    private boolean isEven(int x) {
-        return (x % 2) == 0;
+    private boolean isEven(int v) {
+        return (Math.abs(v) & 0x1) == 0;
+    }
+
+    private boolean isEven(long v) {
+        return (Math.abs(v) & 0x1) == 0;
     }
 
 

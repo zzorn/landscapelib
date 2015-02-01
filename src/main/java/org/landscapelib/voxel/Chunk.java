@@ -3,7 +3,6 @@ package org.landscapelib.voxel;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Mesh;
-import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
@@ -14,7 +13,8 @@ import com.badlogic.gdx.utils.Pool;
 /**
  * Holds data for a section of voxels.
  */
-public final class Chunk implements Pool.Poolable{
+// TODO: Add method to trigger regeneration of a chunk when the world data has changed for the area it is in.  The VoxelLandscape could listen to the world data and update the relevant chunks as needed.
+public final class Chunk implements Pool.Poolable, WorldGenerationListener {
 
     /**
      * Size of a chunk along each side.
@@ -25,8 +25,6 @@ public final class Chunk implements Pool.Poolable{
     private final static int CHUNK_SIZE_SHIFT = 3;
 
     private final static int CHUNK_SIZE_MASK = CHUNK_SIZE - 1;
-
-    public static final byte AIR_TYPE = 0;
 
     /**
      * Number of blocks in the chunk at most.
@@ -39,7 +37,20 @@ public final class Chunk implements Pool.Poolable{
 
     private Vector3 center = new Vector3();
     private float chunkSizeInMeters = 1;
-    private byte[] blockTypes = new byte[BLOCK_COUNT];
+
+    private byte[] primaryMaterial = new byte[BLOCK_COUNT];
+    private byte[] secondaryMaterial = new byte[BLOCK_COUNT];
+
+    /**
+     * Relative amounts of the primary and secondary materials. 255 = all primary material, 0 = 50-50% distribution.
+     */
+    private byte[] materialRatio = new byte[BLOCK_COUNT];
+
+    /**
+     * How much of the block that is filled with matter.  0 = nothing, 255 = completely filled.
+     */
+    private byte[] volume = new byte[BLOCK_COUNT];
+
     private boolean modelNeedsRegeneration = true;
     private ModelInstance modelInstance;
     private Mesh mesh;
@@ -47,6 +58,9 @@ public final class Chunk implements Pool.Poolable{
 
     private boolean allSolid;
     private boolean allAir;
+
+    private boolean calculationOngoing = false;
+    private boolean cancelCalulation = false;
 
     public Chunk() {
     }
@@ -100,29 +114,58 @@ public final class Chunk implements Pool.Poolable{
     }
 
     /**
-     * @return block type at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE).
-     *          If the block coordinates would be too large they are wrapped around to chunk size.
-     */
-    public byte getBlockType(int blockX, int blockY, int blockZ) {
-        // Return block type at the specified position.
-        return blockTypes[calculateBlockIndex(blockX, blockY, blockZ)];
-    }
-
-    /**
      * @return true if the block at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE) is solid.
      *          If the block coordinates would be too large they are wrapped around to chunk size.
      */
     public boolean isSolid(int blockX, int blockY, int blockZ) {
-        return blockTypes[calculateBlockIndex(blockX, blockY, blockZ)] != AIR_TYPE;
+        return volume[calculateBlockIndex(blockX, blockY, blockZ)] != 0;
     }
 
     /**
-     * Updates the block type at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE).
-     * If the block coordinates would be too large they are wrapped around to chunk size.
-     * @param blockType block type to set.
+     * @return most abundant material type at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE).
+     *          If the block coordinates would be too large they are wrapped around to chunk size.
      */
-    public void setBlockType(int blockX, int blockY, int blockZ, byte blockType) {
-        blockTypes[calculateBlockIndex(blockX, blockY, blockZ)] = blockType;
+    public byte getPrimaryMaterial(int blockX, int blockY, int blockZ) {
+        return primaryMaterial[calculateBlockIndex(blockX, blockY, blockZ)];
+    }
+
+    /**
+     * @return second most abundant material type at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE).
+     *          If the block coordinates would be too large they are wrapped around to chunk size.
+     */
+    public byte getSecondaryMaterial(int blockX, int blockY, int blockZ) {
+        return secondaryMaterial[calculateBlockIndex(blockX, blockY, blockZ)];
+    }
+
+    /**
+     * @return distribution between primary and secondary materials (255 = 100% primary material, 0 = 50% primary material)
+     *         at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE).
+     *          If the block coordinates would be too large they are wrapped around to chunk size.
+     */
+    public byte getMaterialRatio(int blockX, int blockY, int blockZ) {
+        return materialRatio[calculateBlockIndex(blockX, blockY, blockZ)];
+    }
+
+    /**
+     * @return volume of material at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE).
+     *         0 = no material, 255 = 100% of the block filled with materials.
+     *          If the block coordinates would be too large they are wrapped around to chunk size.
+     */
+    public byte getVolume(int blockX, int blockY, int blockZ) {
+        return volume[calculateBlockIndex(blockX, blockY, blockZ)];
+    }
+
+    /**
+     * Updates the material at the specified block coordinates inside this chunk (0 .. CHUNK_SIZE).
+     * If the block coordinates would be too large they are wrapped around to chunk size.
+     * @deprecated Modifications should be done directly to the worldModel instead of here.  This is not really useful for anything
+     */
+    private void setMaterial(int blockX, int blockY, int blockZ, byte primaryMaterial, byte secondaryMaterial, byte materialRatio, byte volume) {
+        final int index = calculateBlockIndex(blockX, blockY, blockZ);
+        this.primaryMaterial[index] = primaryMaterial;
+        this.secondaryMaterial[index] = secondaryMaterial;
+        this.materialRatio[index] = materialRatio;
+        this.volume[index] = volume;
 
         modelNeedsRegeneration = true;
     }
@@ -135,36 +178,19 @@ public final class Chunk implements Pool.Poolable{
     }
 
     public void calculateDensityData(WorldFunction worldFunction) {
-        Vector3 blockPos = new Vector3();
-        double blockSize = chunkSizeInMeters / CHUNK_SIZE;
 
-        allSolid = true;
-        allAir = true;
+        // TODO: If already ongoing, wait for previous one to stop then recalc?
+        calculationOngoing = true;
 
-        for (int z = 0; z < CHUNK_SIZE; z++) {
-            for (int y = 0; y < CHUNK_SIZE; y++) {
-                for (int x = 0; x < CHUNK_SIZE; x++) {
+        final double blockSize = chunkSizeInMeters / CHUNK_SIZE;
 
-                    getChunkLocalBlockCenter(blockPos, x, y, z);
+        // TODO: Execute the calculation on a separate thread with a task executor
+        worldFunction.calculateChunk(primaryMaterial, secondaryMaterial, materialRatio, volume,
+                                     center.x, center.y, center.z,
+                                     CHUNK_SIZE,
+                                     blockSize,
+                                     this);
 
-                    blockPos.add(center);
-
-                    final int index = calculateBlockIndex(x, y, z);
-                    final byte terrainType = worldFunction.getTerrainType(blockPos, blockSize);
-                    blockTypes[index] = terrainType;
-
-                    // Determine if all blocks in a chunk are solid or air.
-                    if (terrainType == AIR_TYPE) {
-                        allSolid = false;
-                    }
-                    else {
-                        allAir = false;
-                    }
-                }
-            }
-        }
-
-        modelNeedsRegeneration = true;
     }
 
     public boolean isAllSolid() {
@@ -174,6 +200,8 @@ public final class Chunk implements Pool.Poolable{
     public boolean isAllAir() {
         return allAir;
     }
+
+
 
     public ModelInstance getModelInstance(ChunkMeshGenerator chunkMeshGenerator) {
         if (modelInstance == null || modelNeedsRegeneration) {
@@ -220,21 +248,65 @@ public final class Chunk implements Pool.Poolable{
 
     @Override public void reset() {
         modelNeedsRegeneration = true;
+        cancelCalulation = true;
+    }
+
+    /**
+     * @return true if this chunk can be rendered.
+     */
+    public boolean isReadyToRender() {
+        return !calculationOngoing;
     }
 
     public void render(ModelBatch modelBatch,
                        Environment environment,
                        ChunkMeshGenerator chunkMeshGenerator) {
-        final ModelInstance modelInstance = getModelInstance(chunkMeshGenerator);
 
-        //tempMatrix.set(modelInstance.transform);
+        // If calculation of the terrain data is still ongoing, we can't render
+        if (!calculationOngoing) {
+            modelBatch.render(getModelInstance(chunkMeshGenerator), environment);
+        }
+    }
 
-        //modelInstance.transform.translate(-offset.x, -offset.y, -offset.z);
+    @Override public boolean calculationProgress(float progressZeroToOne) {
+        // Request interrupt of calculation if this chunk moved out of range already (== reset has been called)
+        return !cancelCalulation;
+    }
 
-        modelBatch.render(modelInstance, environment);
+    @Override public void calculationReady() {
+        calculationOngoing = false;
 
-        //modelInstance.transform.set(tempMatrix);
+        updateAllSolidity();
 
+        // Request regeneration of the visual model
+        modelNeedsRegeneration = true;
+    }
+
+    @Override public void calculationAborted() {
+        calculationOngoing = false;
+        cancelCalulation = false;
+
+        // TODO: If the chunk has been initialized again, but a calculation was ongoing, start a new calculation with the new location here.
+    }
+
+    private void updateAllSolidity() {
+        // Determine if all blocks in a chunk are solid or air
+        allSolid = true;
+        allAir = true;
+        for (int i = 0; i < BLOCK_COUNT; i++) {
+            if (volume[i] == 0) {
+                allSolid = false;
+
+                // No need to loop the rest of the blocks if we already determined that not all blocks were air as well
+                if (!allAir) break;
+            }
+            else {
+                allAir = false;
+
+                // No need to loop the rest of the blocks if we already determined that not all blocks were solid as well
+                if (!allSolid) break;
+            }
+        }
     }
 
     private void getChunkLocalBlockCenter(Vector3 centerOut, int chunkX, int chunkY, int chunkZ) {
@@ -245,7 +317,7 @@ public final class Chunk implements Pool.Poolable{
         centerOut.z = (0.5f + chunkZ) * blockSizeInMeters - centerOffset;
     }
 
-    private int calculateBlockIndex(int blockX, int blockY, int blockZ) {
+    public static int calculateBlockIndex(int blockX, int blockY, int blockZ) {
         // Mask the block coordinates to ensure there is no overflows, without doing if-checks.
         // Shift y and z coordinates to correct bit position.  This works as chunk size is a power of two.
         return (CHUNK_SIZE_MASK & blockX) |
