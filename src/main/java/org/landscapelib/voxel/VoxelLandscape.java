@@ -5,18 +5,19 @@ import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import org.flowutils.Check;
+import org.landscapelib.LandscapeRenderer;
 
 import static org.flowutils.Check.notNull;
 
 /**
  *
  */
-public class VoxelLandscape {
+public class VoxelLandscape implements LandscapeRenderer {
 
     private final DetailLevel[] detailLevels;
 
     private final WorldFunction worldFunction;
-    private final Camera camera;
+    private Camera camera;
     private final ChunkManager chunkManager;
 
     private static final int LAYER_SIZE = 8;
